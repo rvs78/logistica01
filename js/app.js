@@ -59,17 +59,17 @@ function startApp(USER){
   try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(fresh(), JSON.parse(raw)); } catch(e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} };
 
-  /* --- puntuació (els errors resten; cap fase baixa de 0) */
+  /* --- puntuació (els errors resten del total; el total no baixa de 0) */
   const qDelta = (q, v) => v === undefined ? 0 : v === q.a ? q.pts : (q.partial && q.partial[v]) ? q.partial[v] : -(q.neg || Math.round(q.pts/2));
   const efDelta = (e, v) => v === undefined ? 0 : v === e.a ? 15 : -5;
   const ordDelta = i => !S.orderDone ? 0 : S.order[i] === i ? 15 : -5;
   const triDelta = i => S.tri[i] === undefined ? 0 : S.tri[i] === VICTIMS[i].a ? 40 : -10;
   const sc1 = () => S.found.length*15 + (S.found.length === 6 ? 10 : 0);
-  const sc2 = () => Math.max(0, P2.reduce((s,q) => s + qDelta(q, S.p2[q.id]), 0) + EFECTES.reduce((s,e,i) => s + efDelta(e, S.ef[i]), 0));
-  const sc3 = () => Math.max(0, P3.reduce((s,q) => s + qDelta(q, S.p3[q.id]), 0) + [0,1,2,3].reduce((s,i) => s + ordDelta(i), 0));
-  const sc4 = () => Math.max(0, VICTIMS.reduce((s,v,i) => s + triDelta(i), 0));
+  const sc2 = () => P2.reduce((s,q) => s + qDelta(q, S.p2[q.id]), 0) + EFECTES.reduce((s,e,i) => s + efDelta(e, S.ef[i]), 0);
+  const sc3 = () => P3.reduce((s,q) => s + qDelta(q, S.p3[q.id]), 0) + [0,1,2,3].reduce((s,i) => s + ordDelta(i), 0);
+  const sc4 = () => VICTIMS.reduce((s,v,i) => s + triDelta(i), 0);
   const bonus = () => (S.phase >= 5 && S.hints === 0) ? 50 : 0;
-  const total = () => sc1() + sc2() + sc3() + sc4() + bonus();
+  const total = () => Math.max(0, sc1() + sc2() + sc3() + sc4() + bonus());
   const errors = () => P2.filter(q => S.p2[q.id] !== undefined && S.p2[q.id] !== q.a).length + EFECTES.filter((e,i) => S.ef[i] !== undefined && S.ef[i] !== e.a).length
     + P3.filter(q => S.p3[q.id] !== undefined && S.p3[q.id] !== q.a).length + (S.orderDone ? [0,1,2,3].filter(i => S.order[i] !== i).length : 0) + VICTIMS.filter((v,i) => S.tri[i] !== undefined && S.tri[i] !== v.a).length;
 
