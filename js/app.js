@@ -78,7 +78,7 @@ function startApp(USER){
   applyPrefs();
   S.found.forEach(id => W.markFound(id));
   if (S.activated) W.finishActivation();
-  Object.keys(S.tri).sort((a,b) => a-b).forEach(i => W.admit(S.tri[i], false));
+  Object.keys(S.tri).sort((a,b) => a-b).forEach(i => W.admit(S.tri[i], false, +i));
 
   const panel = $("#panel");
   const PH = ["Inici","Analitza","Classifica","Activa","Triatge","Informe"];
@@ -94,11 +94,15 @@ function startApp(USER){
     $("#hint3d").textContent = v === "vall" ? "Arrossega per girar el mapa · roda o pinça per apropar · toca els cercles taronja" : "Arrossega per girar · roda o pinça per apropar";
     renderBeds();
   }
+  let bedsOpen = (() => { try { const v = localStorage.getItem("hc-beds-open"); if (v !== null) return v === "1"; } catch(e) {} return innerWidth > 640; })();
   function renderBeds(){
-    const f = W.free();
-    $("#beds").innerHTML = ["r","y","g","k"].map(t => `<div><span style="width:18px;height:18px;color:#fff;display:inline-flex">${TAG_SHAPE[t]}</span>${TAGS[t][0]}: <b>${f[t]}</b> ${t === "g" ? "places" : "llits"} lliures</div>`).join("");
+    const f = W.free(), tot = f.r + f.y + f.g + f.k;
+    $("#beds").innerHTML = `<button type="button" class="bedsBtn" id="bedsBtn" aria-expanded="${bedsOpen}" aria-controls="bedsList">${bedsOpen ? "▾ Amaga" : "▸ Mostra"} places lliures <b>(${tot})</b></button>` +
+      `<div id="bedsList" ${bedsOpen ? "" : "hidden"}>` + ["r","y","g","k"].map(t => `<div><span style="width:18px;height:18px;color:#fff;display:inline-flex">${TAG_SHAPE[t]}</span>${TAGS[t][0]}: <b>${f[t]}</b> ${t === "g" ? "places" : "llits"} lliures</div>`).join("") + `</div>`;
+    $("#bedsBtn").onclick = () => { bedsOpen = !bedsOpen; try { localStorage.setItem("hc-beds-open", bedsOpen ? "1" : "0"); } catch(e) {} renderBeds(); $("#bedsBtn").focus(); };
   }
   $("#vVall").onclick = () => setView("vall");
+  $("#lockBack").onclick = () => setView("vall");
   $("#vHosp").onclick = () => setView("hosp");
   $("#zIn").onclick = () => W.zoom(1); $("#zOut").onclick = () => W.zoom(-1); $("#zHome").onclick = () => W.resetCam();
   $("#skip").onclick = () => W.finishActivation();
@@ -112,13 +116,15 @@ function startApp(USER){
     $("#vHosp").innerHTML = (S.phase < 3 ? ICON.lock.replace("<svg", '<svg class="ico"') : "") + "Hospital";
   }
 
+  let shownPhase = -1;
   function render(){
     renderTop();
     panel.innerHTML = [renderIntro, renderP1, renderP2, renderP3, renderP4, renderP5][S.phase]();
     bind();
     W.showSpots(S.phase <= 2);
     W.showSites(S.phase === 3 && S.p3.lloc === undefined);
-    setView(S.phase === 4 ? "hosp" : W.getView());
+    if (S.phase === 4 && shownPhase !== 4) setView("hosp"); else setView(W.getView());
+    shownPhase = S.phase;
   }
   const todo = (steps) => `<div class="todo"><b>Què has de fer</b><ol>${steps.map(s => `<li>${s}</li>`).join("")}</ol></div>`;
   function hintHTML(key, text){ return S.hintOpen[key] ? `<div class="hintbox"><b>Pista:</b> ${esc(text)}</div>` : `<button type="button" class="hintbtn" data-hint="${key}">Vull una pista (perds la bonificació final de 50 punts)</button>`; }
@@ -295,7 +301,7 @@ function startApp(USER){
     const orr = $("#ordReset"); if (orr) orr.onclick = () => { S.order = []; save(); render(); };
     const ook = $("#ordOk"); if (ook) ook.onclick = () => { S.orderDone = true; save(); render(); };
     const ac = $("#activate"); if (ac) ac.onclick = () => { ac.disabled = true; setView("vall"); $("#skip").hidden = false; W.playActivation(() => { $("#skip").hidden = true; S.activated = true; save(); render(); const n = $("#next"); n && n.focus(); }); };
-    panel.querySelectorAll("[data-tag]").forEach(b => b.onclick = () => { const i = S.vi; if (S.tri[i]) return; S.tri[i] = b.dataset.tag; save(); setView("hosp"); W.admit(b.dataset.tag, true); render(); renderBeds(); const n = $("#nextV"); n && n.focus(); });
+    panel.querySelectorAll("[data-tag]").forEach(b => b.onclick = () => { const i = S.vi; if (S.tri[i]) return; S.tri[i] = b.dataset.tag; save(); setView("hosp"); W.admit(b.dataset.tag, true, i); render(); renderBeds(); const n = $("#nextV"); n && n.focus(); });
     const nv = $("#nextV"); if (nv) nv.onclick = () => { S.vi++; save(); render(); };
     const cp = $("#copy"); if (cp) cp.onclick = () => { const msg = $("#copied"), fallback = () => { const ta = $("#resultTxt"); ta.focus(); ta.select(); msg.textContent = "Text seleccionat. Copia'l amb Ctrl+C."; };
       try { navigator.clipboard.writeText(resultText()).then(() => { msg.textContent = "Copiat."; }, fallback); } catch(e){ fallback(); } };

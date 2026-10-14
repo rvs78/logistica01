@@ -81,7 +81,7 @@ function createWorld(stage, cb){
     const a = hash(xi,zi), b = hash(xi+1,zi), c = hash(xi,zi+1), d = hash(xi+1,zi+1); return a + (b-a)*u + (c-a)*v + (a-b-c+d)*u*v; }
   function fbm(x, z){ let f = 0, amp = .5, fr = 1; for (let i=0;i<5;i++){ f += amp*vnoise(x*fr, z*fr); fr *= 2.03; amp *= .5; } return f; }
   const riverX = z => 4.4 + Math.sin(z*0.11) * 1.0;
-  const FLAT = [{x:-3,z:-7,r:12,h:0.12},{x:-7.4,z:4.5,r:6.5,h:0.08},{x:-11.8,z:11.5,r:4.2,h:0.1},{x:1.3,z:-15,r:4,h:0.12}];
+  const FLAT = [{x:-3,z:-7,r:12,h:0.12},{x:-7.4,z:4.5,r:6.5,h:0.08},{x:-11.8,z:11.5,r:4.2,h:0.1},{x:1.3,z:-15,r:4,h:0.12},{x:-5.5,z:14,r:5.5,h:0.1}];
   function H(x, z){
     const cx = 0.5 + Math.sin(z*0.04)*1.5, d = Math.abs(x - cx);
     let h = (fbm(x*0.14+3, z*0.14) - .5) * .7;
@@ -188,6 +188,7 @@ function createWorld(stage, cb){
     if (Math.abs(x - riverX(z)) < 2.6) continue;
     if (x > -12.5 && x < 4 && z > -19 && z < 8.5) continue;
     if (Math.hypot(x+11.8, z-11.5) < 4.5) continue;
+    if (Math.hypot(x+5.5, z-14) < 6.5) continue;
     if (x > 4 && x < 14 && z > 21 && z < 33) continue;
     if (nearRoad(x, z, 1.6)) continue;
     if (y < 2 && rnd() < .55) continue;
@@ -301,7 +302,7 @@ function createWorld(stage, cb){
 
   /* --- etiquetes de lloc */
   const placeLabels = new THREE.Group(); scene.add(placeLabels);
-  [["Poble d'Arnes",-3,6.2,-6.5],["Riu Arnes",6.8,1.4,-2],["Camp de futbol",-7.4,2.2,1.6],["Heliport",-11.8,2,13.8],["Església",-6.9,8.4,-5.4]].forEach(([t,x,y,z]) => { const l = label(t, {fs:40, scale:.015}); l.position.set(x, H(x,z)+y, z); placeLabels.add(l); });
+  [["Poble d'Arnes",-3,6.2,-6.5],["Riu Arnes",6.8,1.4,-2],["Camp de futbol",-7.4,2.2,1.6],["Heliport",-11.8,2,13.8],["Església",-6.9,8.4,-5.4],["Festival · 400 persones",-5.5,4.2,14]].forEach(([t,x,y,z]) => { const l = label(t, {fs:40, scale:.015}); l.position.set(x, H(x,z)+y, z); placeLabels.add(l); });
 
   /* --- punts d'informació */
   const spotObjs = {}, clickables = [];
@@ -328,11 +329,44 @@ function createWorld(stage, cb){
 
   /* --- vehicles i persones (seqüència d'activació) */
   const ambTex = tex(128, 64, (g,w,h) => { g.fillStyle = "#f2d22e"; g.fillRect(0,0,w,h); for (let i=0;i<16;i++){ g.fillStyle = i%2 ? "#1f7a43" : "#f2d22e"; g.fillRect(i*8, h*.45, 8, 10); g.fillStyle = i%2 ? "#f2d22e" : "#1f7a43"; g.fillRect(i*8, h*.45+10, 8, 10); } });
-  function person(color, helmet){ const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(.14,.17,.62,8), std(color)); b.position.y = .45; b.castShadow = true; g.add(b);
-    const lg = new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,.3,6), std(0x2a2f36)); lg.position.y = .15; g.add(lg);
-    const hd = new THREE.Mesh(new THREE.SphereGeometry(.12,10,8), std(0xe0bfa0)); hd.position.y = .88; g.add(hd);
-    if (helmet){ const hm = new THREE.Mesh(new THREE.SphereGeometry(.14,10,6,0,Math.PI*2,0,Math.PI/2), std(helmet)); hm.position.y = .9; g.add(hm); }
-    return g; }
+  const SKINS = [0xe8c4a2,0xd7a77e,0xb07a52,0x8a5a3a,0xf0d2b8];
+  const geoP = {leg:new THREE.CylinderGeometry(.055,.05,.4,6), torso:new THREE.CylinderGeometry(.15,.12,.4,8), arm:new THREE.CylinderGeometry(.04,.035,.34,6), head:new THREE.SphereGeometry(.105,12,10), helm:new THREE.SphereGeometry(.125,12,6,0,Math.PI*2,0,Math.PI/2), cap:new THREE.CylinderGeometry(.11,.11,.06,10)};
+  geoP.leg.translate(0,-.2,0); geoP.arm.translate(0,-.17,0);
+  const matCache = {}; const mc = c => matCache[c] || (matCache[c] = std(c));
+  // o: {shirt, pants, skin, helmet, cap, reflect}
+  function person(color, helmet, o){
+    o = Object.assign({shirt:color, pants:0x2a2f36, skin:SKINS[Math.floor(rnd()*SKINS.length)], helmet}, o||{});
+    const g = new THREE.Group(); const legs = [], arms = [];
+    [-.07,.07].forEach(x => { const hip = new THREE.Group(); hip.position.set(x,.42,0); const l = new THREE.Mesh(geoP.leg, mc(o.pants)); hip.add(l); g.add(hip); legs.push(hip); });
+    const t = new THREE.Mesh(geoP.torso, mc(o.shirt)); t.position.y = .62; t.castShadow = true; g.add(t);
+    if (o.reflect){ const b = new THREE.Mesh(new THREE.CylinderGeometry(.152,.14,.05,8), mc(0xd8d8d8)); b.position.y = .55; g.add(b); }
+    [-.19,.19].forEach(x => { const sh = new THREE.Group(); sh.position.set(x,.78,0); sh.rotation.z = x < 0 ? -.08 : .08; const a = new THREE.Mesh(geoP.arm, mc(o.shirt)); sh.add(a); g.add(sh); arms.push(sh); });
+    const hd = new THREE.Mesh(geoP.head, mc(o.skin)); hd.position.y = .93; g.add(hd);
+    if (o.helmet){ const hm = new THREE.Mesh(geoP.helm, mc(o.helmet)); hm.position.y = .95; g.add(hm); }
+    else if (o.cap){ const cp = new THREE.Mesh(geoP.cap, mc(o.cap)); cp.position.y = 1.01; g.add(cp); }
+    g.userData.legs = legs; g.userData.arms = arms; return g;
+  }
+  const UNI = {doc:{shirt:0x2d5f9a, pants:0x2d5f9a, cap:0x2d5f9a}, inf:{shirt:0x2f8a7a, pants:0x2f8a7a, cap:0x2f8a7a}, tes:{shirt:0xe3c51b, pants:0x23412f, reflect:true}, log:{shirt:0xe0702a, pants:0x2a2f36, reflect:true}};
+  function lying(p, ry){ p.rotation.set(0, ry||0, Math.PI/2); return p; }
+  function pose(p, kind){ const L = p.userData.legs, A = p.userData.arms;
+    if (kind === "kneel"){ L.forEach(l => l.rotation.x = -1.5); p.position.y -= .32; A.forEach(a => a.rotation.x = -.9); }
+    if (kind === "sit"){ L.forEach(l => l.rotation.x = -1.45); p.position.y -= .2; }
+    if (kind === "wave"){ A[1].rotation.z = 2.6; }
+    if (kind === "cheer"){ A.forEach((a,i) => a.rotation.z = i ? 2.5 : -2.5); }
+    return p; }
+  /* caminants animats: path = [[x,z],...] (anada i tornada) */
+  const walkers = [];
+  function addWalker(par, p, path, spd, yFn){ let L = 0; const seg = path.slice(1).map((b,i) => { const a = path[i], l = Math.hypot(b[0]-a[0], b[1]-a[1]); L += l; return l; });
+    const w = {p, path, seg, len:L, d:rnd()*L, dir:rnd() < .5 ? 1 : -1, spd:spd||.9, yFn:yFn||(() => 0), ph:rnd()*6}; walkers.push(w); par.add(p); return w; }
+  function stepWalkers(dt){
+    walkers.forEach(w => { if (!w.p.visible) return;
+      w.d += w.dir*w.spd*dt; if (w.d > w.len){ w.d = w.len; w.dir = -1; } if (w.d < 0){ w.d = 0; w.dir = 1; }
+      let acc = 0, i = 0; while (i < w.seg.length-1 && w.d > acc + w.seg[i]){ acc += w.seg[i]; i++; }
+      const a = w.path[i], b = w.path[i+1], t = w.seg[i] ? (w.d-acc)/w.seg[i] : 0, x = a[0]+(b[0]-a[0])*t, z = a[1]+(b[1]-a[1])*t;
+      w.p.position.set(x, w.yFn(x,z), z); w.p.rotation.y = Math.atan2((b[0]-a[0])*w.dir, (b[1]-a[1])*w.dir);
+      w.ph += dt*w.spd*7; const k = Math.sin(w.ph)*.55; const L = w.p.userData.legs, A = w.p.userData.arms;
+      if (L){ L[0].rotation.x = k; L[1].rotation.x = -k; } if (A && !w.carry){ A[0].rotation.x = -k*.8; A[1].rotation.x = k*.8; } });
+  }
   function ambulance(){ const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(.85,.8,1.6), std(0xffffff,{map:ambTex})); body.position.set(0,.62,-.15); body.castShadow = true; g.add(body);
     addBox(.82,.55,.55, std(0xf2d22e), 0,.5,.85, 0, g); addBox(.74,.28,.05, std(0x1d2730,{roughness:.2}), 0,.62,1.13,0,g);
     const lb = addBox(.6,.1,.14, new THREE.MeshStandardMaterial({color:0x2266ff, emissive:0x2266ff, emissiveIntensity:1.5}), 0,1.07,.2,0,g); g.userData.lights = lb;
@@ -353,6 +387,60 @@ function createWorld(stage, cb){
     g.userData.rotor = rotor; g.userData.tail = tr2; return g; }
   function tent(col, w, d){ const g = new THREE.Group(); addBox(w, .9, d, std(0x6b7350), 0, .45, 0, 0, g); const r = gable(w-.2, d, .9, std(col)); r.position.y = .9; g.add(r); return g; }
 
+  /* ================================================== gent a la vall */
+  const town = new THREE.Group(); scene.add(town);
+  const gY = (x,z) => Math.max(H(x,z), -0.05) + .02;
+  const CLOTH = [0x3b5b8c,0x8c3b3b,0x3f6b45,0x6b5a3b,0x5a3b6b,0xd9d4c4,0x2f2f2f,0xb36b2a,0x2a7a8a,0xc9b23a,0x9a2f6a];
+  const cl = () => CLOTH[Math.floor(rnd()*CLOTH.length)];
+  const civ = o => person(cl(), null, Object.assign({pants: rnd() < .5 ? 0x2a2f36 : 0x3b4a6b}, o||{}));
+  // veïns que caminen pels carrers
+  const STREETS = [[[-1.4,-20],[-1.4,-6],[-1.4,4]], [[-0.6,-18],[-0.6,-8],[-0.6,3.5]], [[-1.2,-6.3],[-8.5,-6.3]], [[-1,-12.9],[3.2,-12.9]], [[-1.3,4.5],[-3.6,4.5]], [[-3.6,12.2],[-1.6,9.5],[-1.3,4]], [[-7.8,12],[-4.4,8.6],[-1.6,6]]];
+  for (let i=0;i<26;i++){ const st = STREETS[i % STREETS.length]; const ox = (rnd()-.5)*.5, oz = (rnd()-.5)*.5; addWalker(town, civ(), st.map(([x,z]) => [x+ox, z+oz]), .45 + rnd()*.6, gY); }
+  // residents de la residència al carrer, amb mantes
+  for (let i=0;i<12;i++){ const x = .1 + (i%6)*.55, z = -12.3 - Math.floor(i/6)*.55; const p = person(rnd() < .5 ? 0x8a8f99 : 0x6b5a4a, null, {cap:0xdedede, pants:0x4a4a4a}); p.position.set(x, gY(x,z), z); p.rotation.y = Math.PI + (rnd()-.5); if (i%3 === 0){ pose(p, "sit"); const bl = addBox(.42,.3,.3, std(0x7a3b3b), 0,.45,.12,0,p); } town.add(p); }
+  // ferits estirats i persones que els ajuden
+  const BLANKET = std(0xc9a227);
+  function injured(x, z, ry, helper, blanket){ const p = civ(); p.position.set(x, gY(x,z)+.13, z); lying(p, ry); town.add(p);
+    if (blanket){ const b = new THREE.Mesh(new THREE.BoxGeometry(.06,.75,.42), BLANKET); b.position.set(-.06, .5, 0); p.add(b); }
+    if (helper){ const d = new THREE.Vector3(0,.55,0).applyEuler(p.rotation); const h = civ(); h.position.set(x + d.x + .35, gY(x,z), z + d.z + .35); h.rotation.y = Math.atan2(-.35,-.35); pose(h, "kneel"); town.add(h); } }
+  injured(-2.4,-9.0,.3,true); injured(-2.9,-10.7,1.4,true); injured(-2.1,-7.9,2.2,false,true);
+  injured(-1.0,-3.2,.8,true); injured(2.6,-11.6,0,false,true); injured(-0.4,1.2,2.6,true);
+  injured(-6.6,15.6,.4,true); injured(-4.0,15.4,1.8,true); injured(-7.6,13.0,2.9,false,true); injured(-3.4,12.4,.9,true,true);
+  // persones que demanen ajuda
+  [[-3.1,-11.4],[-1.8,-10.2],[3.2,-11.8]].forEach(([x,z]) => { const p = civ(); p.position.set(x, gY(x,z), z); pose(p, "wave"); p.rotation.y = rnd()*6; town.add(p); });
+
+  /* --- festival: escenari, parades, tendes i multitud */
+  const fest = new THREE.Group(); scene.add(fest);
+  const FX = -5.5, FZ = 14, fy = (x,z) => H(x,z);
+  const bannerT = tex(512, 160, (g,w,h) => { g.fillStyle = "#14141c"; g.fillRect(0,0,w,h); const gr = g.createLinearGradient(0,0,w,0); gr.addColorStop(0,"#ff5a3c"); gr.addColorStop(1,"#ffb13c"); g.fillStyle = gr; g.font = "bold 72px Arial"; g.textAlign = "center"; g.fillText("FESTIVAL", w/2, 78); g.fillStyle = "#f2f2f2"; g.font = "bold 46px Arial"; g.fillText("VALL D'ARNES", w/2, 136); });
+  const sy0 = fy(FX, 17.4);
+  addBox(5.2,.6,2.6, std(0x2b2b2e), FX, sy0+.3, 17.6, 0, fest);
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(5,1.6), std(0xffffff,{map:bannerT})); banner.position.set(FX, sy0+1.6, 18.85); banner.rotation.y = Math.PI; fest.add(banner);
+  const bannerBack = addBox(5.1,1.8,.08, std(0x14141c), FX, sy0+1.6, 18.92, 0, fest);
+  [[-2.5,16.4],[2.5,16.4],[-2.5,18.8]].forEach(([dx,z]) => addBox(.12,3.4,.12, steel, FX+dx, sy0+1.7, z, 0, fest));
+  const fallenPost = addBox(.12,3.4,.12, steel, FX+2.9, sy0+.35, 18.4, 0, fest); fallenPost.rotation.z = 1.3;
+  const truss = addBox(5.4,.18,2.7, steel, FX+.2, sy0+3.0, 17.6, 0, fest); truss.rotation.z = -.16;
+  const blk = std(0x111111);
+  [-3.2, 3.2].forEach(dx => { addBox(.7,1.5,.7, blk, FX+dx, fy(FX+dx,16.6)+.75, 16.6, 0, fest); });
+  const tipped = addBox(.7,1.5,.7, blk, FX+3.4, fy(FX+3.4,15.6)+.35, 15.6, 0, fest); tipped.rotation.z = Math.PI/2;
+  for (let i=0;i<8;i++){ const x = FX-3 + i*.85; addBox(.8,.5,.06, steel, x, fy(x,15.9)+.25, 15.9, 0, fest); }
+  [[-9.3,11.6,0xc0392b],[-2.6,11.0,0x2471a3]].forEach(([x,z,c]) => { const t = tent(c, 1.6, 1.3); t.position.set(x, fy(x,z), z); fest.add(t); });
+  const domeG = new THREE.SphereGeometry(.7, 14, 8, 0, Math.PI*2, 0, Math.PI/2);
+  for (let i=0;i<14;i++){ const x = -9 + (i%7)*1.05 + (rnd()-.5)*.3, z = 19.6 + Math.floor(i/7)*1.2 + (rnd()-.5)*.3; const d = new THREE.Mesh(domeG, std([0x2e86c1,0xf39c12,0x27ae60,0x8e44ad,0xc0392b][i%5])); d.scale.set(1.2,.9,.9); d.position.set(x, fy(x,z), z); d.castShadow = true; fest.add(d); }
+  const NC = 240, bodyG = new THREE.CylinderGeometry(.13,.15,.62,7); bodyG.translate(0,.36,0); const headG = new THREE.SphereGeometry(.1,8,6); headG.translate(0,.77,0);
+  const crowdB = new THREE.InstancedMesh(bodyG, std(0xffffff), NC), crowdH = new THREE.InstancedMesh(headG, std(0xffffff), NC);
+  crowdB.castShadow = true; const crowd = [];
+  for (let i=0, k=0; k<NC && i<4000; i++){
+    const a = rnd()*Math.PI*2, r = Math.sqrt(rnd()); let x = FX + Math.cos(a)*r*3.6, z = 13.2 + Math.sin(a)*r*2.4;
+    if (z > 15.5) continue; if ([[-6.6,15.6],[-4,15.4],[-7.6,13],[-3.4,12.4]].some(([ix,iz]) => Math.hypot(x-ix, z-iz) < .9)) continue;
+    crowd.push({x, z, y:fy(x,z), ph:rnd()*6, ry:rnd()*6}); C.setHex(CLOTH[Math.floor(rnd()*CLOTH.length)]); crowdB.setColorAt(k, C); C.setHex(SKINS[Math.floor(rnd()*SKINS.length)]); crowdH.setColorAt(k, C); k++;
+  }
+  crowdB.count = crowdH.count = crowd.length;
+  function placeCrowd(t){ crowd.forEach((c,i) => { const b = reduced ? 0 : Math.max(0, Math.sin(t*2 + c.ph))*.04; M4.compose(V.set(c.x, c.y + b, c.z), Q.setFromEuler(E.set(0, c.ry, 0)), S3.set(1,1,1)); crowdB.setMatrixAt(i, M4); crowdH.setMatrixAt(i, M4); }); crowdB.instanceMatrix.needsUpdate = crowdH.instanceMatrix.needsUpdate = true; }
+  placeCrowd(0); fest.add(crowdB, crowdH);
+  // personal de seguretat del festival
+  [[-8.9,14.6],[-2.1,14.6],[-5.5,11.2]].forEach(([x,z]) => { const p = person(0x111111, null, {reflect:true}); p.position.set(x, fy(x,z), z); p.rotation.y = Math.PI; fest.add(p); });
+
   const act = new THREE.Group(); act.visible = false; scene.add(act);
   const hpY = H(-11.8, 11.5) + .05;
   const helis = [
@@ -372,7 +460,7 @@ function createWorld(stage, cb){
   const truck = {path:[[-1,-3],[-1,-6],[-4.6,-6],[-4.6,-7.2]], t0:3.5, spd:2.6, m:fireTruck()}; act.add(truck.m);
   { let L = 0; truck.seg = truck.path.slice(1).map((b,i) => { const a = truck.path[i], l = Math.hypot(b[0]-a[0], b[1]-a[1]); L += l; return l; }); truck.len = L; }
   const rescuers = [];
-  [[-4.2,-9.9],[-3.4,-10.4],[-2.9,-9.4],[-4.9,-8.2],[0.2,-13.6],[1.6,-13.4],[2.6,-13.7],[-6,4.4],[-5.6,2.4],[-8,5.0]].forEach(([x,z],i) => { const p = person(i < 7 ? 0x2b3138 : 0x2f7b6a, i < 7 ? 0xf2c21b : null); p.position.set(x, H(x,z), z); p.rotation.y = rnd()*6; p.scale.set(.001,.001,.001); act.add(p); rescuers.push(p); });
+  [[-4.2,-9.9],[-3.4,-10.4],[-2.9,-9.4],[-4.9,-8.2],[0.2,-13.6],[1.6,-13.4],[2.6,-13.7],[-6,4.4],[-5.6,2.4],[-8,5.0]].forEach(([x,z],i) => { const p = i < 7 ? person(0x2b3138, 0xf2c21b, {reflect:true}) : person(null, null, UNI.tes); p.position.set(x, H(x,z), z); p.rotation.y = rnd()*6; p.scale.set(.001,.001,.001); act.add(p); rescuers.push(p); });
   const lightTowers = [[-3.6,-10.8],[0.8,-13.4],[-4.4,7.2]].map(([x,z]) => { const g = new THREE.Group(); addBox(.08,2.6,.08, steel, 0,1.3,0,0,g); const lamp = addBox(.7,.3,.2, new THREE.MeshStandardMaterial({color:0xfff6d8, emissive:0xfff2c8, emissiveIntensity:1.6}), 0,2.6,0,0,g);
     const L = new THREE.PointLight(0xfff0cc, 0, 9); L.position.y = 2.5; g.add(L); g.userData.L = L; g.position.set(x, H(x,z), z); g.visible = false; act.add(g); return g; });
   function along(p, d){ let acc = 0; for (let i=0;i<p.seg.length;i++){ if (d <= acc + p.seg[i] || i === p.seg.length-1){ const t = clamp((d-acc)/p.seg[i],0,1), a = p.path[i], b = p.path[i+1]; return {x:a[0]+(b[0]-a[0])*t, z:a[1]+(b[1]-a[1])*t, ry:Math.atan2(b[0]-a[0], b[1]-a[1])}; } acc += p.seg[i]; } }
@@ -461,23 +549,54 @@ function createWorld(stage, cb){
   addBox(2,1.3,1.1, std(0xd9a21b), -19,.7,9,0,hs); addBox(.12,.6,.12, std(0x333333), -18.4,1.6,9,0,hs);
   const bladder = new THREE.Mesh(new THREE.SphereGeometry(1.4,20,12), std(0x2f6fa8,{roughness:.6})); bladder.scale.set(1.3,.35,1); bladder.position.set(-19.5,.45,-3); hs.add(bladder);
   const gl = label("GENERADOR", {fs:36, scale:.016}); gl.position.set(-19, 2.4, 9); hs.add(gl);
-  // personal sanitari
-  [[11,-1.2,0x2c6e8f],[11.6,2.4,0x2c6e8f],[3,-4.6,0x2c6e8f],[6.5,-4.6,0x6a2c8f],[4,3.6,0x2c6e8f],[-8,3.2,0x2c6e8f]].forEach(([x,z,c]) => { const p = person(c); p.position.set(x,.12,z); p.rotation.y = rnd()*6; hs.add(p); });
+  // personal sanitari amb uniformes: metge/essa (blau), infermer/a (verd), TES (groc), logística (taronja)
+  const staffAt = (u, x, z, ry, k) => { const p = person(null, null, UNI[u]); p.position.set(x,.12,z); p.rotation.y = ry; if (k) pose(p,k); hs.add(p); return p; };
+  staffAt("inf", 13.4,-1.7, -Math.PI/2); staffAt("doc", 11.6,-2.1, 0); staffAt("tes", 13.4,2.4, Math.PI);
+  [0.6,4.0,7.4].forEach((x,i) => staffAt(i === 1 ? "inf" : "doc", x, -5.05, Math.PI));
+  staffAt("inf", 2.6, 6.0, 0); staffAt("doc", 6.4, 6.0, Math.PI); staffAt("inf", -9.6, 3.5, Math.PI); staffAt("tes", -10.6,-4.0, Math.PI); staffAt("inf", -1.6,-1.45, Math.PI);
+  staffAt("tes", 18.4, 4.0, -Math.PI/2); staffAt("tes", 20.4, -2.6, Math.PI/2);
+  const hstaff = (u, path, spd, carry) => { const p = person(null, null, UNI[u]); const w = addWalker(hs, p, path, spd, () => .12); if (carry){ w.carry = true; p.userData.arms.forEach(a => a.rotation.x = -1.2); addBox(.42,.32,.32, std(0xb98c58), 0,.68,.32,0,p); } return p; };
+  hstaff("inf", [[-.4,-4.3],[9.2,-4.3]], .7); hstaff("doc", [[.2,3.3],[9,3.3]], .6); hstaff("log", [[-15.4,1.2],[-8,1.2],[-2.2,-.9]], .8, true); hstaff("log", [[-15.4,-1.4],[-6,-2.6],[0,-3.7]], .7, true); hstaff("tes", [[15.2,-.7],[11.4,-.7]], .5);
+  // cua de víctimes a l'entrada (la víctima i del triatge = posició i de la cua)
+  const queue = [];
+  function buildQueue(){
+    queue.forEach(q => q && hs.remove(q.g)); queue.length = 0;
+    VICTIMS.forEach((v,i) => { const g = new THREE.Group(); const walks = v.camina === "Sí"; const shirt = CLOTH[(i*3) % CLOTH.length];
+      const p = person(shirt, null, {pants: i%2 ? 0x2a2f36 : 0x3b4a6b});
+      if (walks){ g.add(p); } else { const st = stretcher(); st.rotation.y = Math.PI/2; g.add(st); p.position.set(0,.6,-.5); lying(p, Math.PI/2); g.add(p); }
+      g.position.set(17.8 + (i%5)*1.25, .12, i < 5 ? -.3 : 1.9); hs.add(g); queue.push({g, walks, shirt}); });
+  }
+  buildQueue();
   // pacients
   const patients = new THREE.Group(); hs.add(patients);
   const used = {r:0, y:0, g:0, k:0}; const pTweens = [];
   const TAGC = {g:0x1f7a43, y:0xf1c21b, r:0xc21f1f, k:0x161616};
-  function admit(tag, animate){
+  function admit(tag, animate, idx){
+    const q = queue[idx]; let sx = 17, sz = 0, walks = true, shirt = 0xd9d4c4;
+    if (q){ sx = q.g.position.x; sz = q.g.position.z; walks = q.walks; shirt = q.shirt; hs.remove(q.g); queue[idx] = null; }
     const slot = SLOTS[tag][used[tag]];
-    const p = person(0xd9d4c4); const vest = new THREE.Mesh(new THREE.CylinderGeometry(.18,.2,.22,8), std(TAGC[tag])); vest.position.y = .55; p.add(vest);
-    patients.add(p);
+    const p = person(shirt, null, {pants:0x2a2f36}); const vest = new THREE.Mesh(new THREE.CylinderGeometry(.165,.17,.2,8), std(TAGC[tag])); vest.position.y = .66; p.add(vest);
     let tx, tz, final;
-    if (slot){ used[tag]++; tx = slot.x; tz = slot.z; final = slot; }
-    else { const zn = ZONES[tag]; tx = zn.x + (rnd()-.5)*2; tz = zn.z + (zn.z < 0 ? 2.4 : -2.4); final = {x:tx, z:tz, y:.12, lie:false}; used[tag]++; }
-    const place = () => { p.position.set(final.x, final.y, final.z); if (final.lie){ p.rotation.set(0, final.ry, Math.PI/2); p.position.y = final.y + .05; if (final.cover){ const sh = new THREE.Mesh(new THREE.BoxGeometry(1.1,.08,.5), std(0xf1f1ec)); sh.rotation.z = -Math.PI/2; sh.position.y = .3; p.add(sh); } } else if (final.sit){ p.position.y = .3; p.rotation.y = final.ry; } };
+    if (slot){ tx = slot.x; tz = slot.z; final = slot; }
+    else { const zn = ZONES[tag]; tx = zn.x + (rnd()-.5)*2; tz = zn.z + (zn.z < 0 ? 2.4 : -2.4); final = {x:tx, z:tz, y:.12, lie:false}; }
+    used[tag]++;
+    const place = () => { patients.add(p); p.rotation.set(0,0,0); p.userData.legs.forEach(l => l.rotation.x = 0);
+      if (final.lie){ p.rotation.set(0, final.ry, Math.PI/2); const d = new THREE.Vector3(0,.5,0).applyEuler(p.rotation); p.position.set(final.x - d.x, final.y + .03, final.z - d.z);
+        if (final.cover){ const sh = new THREE.Mesh(new THREE.BoxGeometry(.06,1.05,.46), std(0xf1f1ec)); sh.position.set(-.13,.52,0); p.add(sh); } }
+      else if (final.sit){ p.position.set(final.x, .58, final.z); p.rotation.y = final.ry; pose(p, "sit"); }
+      else { p.position.set(final.x, final.y, final.z); } };
     if (!animate || reduced){ place(); return; }
-    const sx = 17, sz = 0; p.position.set(sx, .12, sz);
-    pTweens.push({t:0, dur:2.4, fn:u => { const e = ease(u); const midx = 12; let x, z; if (e < .4){ const k = e/.4; x = sx + (midx - sx)*k; z = sz; } else { const k = (e-.4)/.6; x = midx + (tx - midx)*k; z = sz + (tz - sz)*k; } p.position.set(x, .12 + Math.abs(Math.sin(e*28))*.05, z); p.rotation.y = Math.atan2(tx - x || -1, tz - z || 0); }, done:place});
+    const route = (e) => { const midx = 12.5; if (e < .4){ const k = e/.4; return [sx + (midx - sx)*k, sz + (0 - sz)*k]; } const k = (e-.4)/.6; return [midx + (tx - midx)*k, (tz)*k]; };
+    if (walks){
+      patients.add(p);
+      pTweens.push({t:0, dur:3.2, fn:u => { const e = ease(u), [x,z] = route(e), [nx,nz] = route(Math.min(1,e+.02)); p.position.set(x,.12,z); p.rotation.y = Math.atan2(nx-x, nz-z); const k = Math.sin(u*40)*.5; p.userData.legs[0].rotation.x = k; p.userData.legs[1].rotation.x = -k; }, done:place});
+    } else {
+      const car = new THREE.Group(); const st = stretcher(); st.rotation.y = Math.PI/2; car.add(st); car.add(p); p.position.set(0,.6,-.5); lying(p, Math.PI/2);
+      const bearers = [person(null,null,UNI.tes), person(null,null,UNI.tes)]; bearers[0].position.set(0,0,1.3); bearers[1].position.set(0,0,-1.3); bearers.forEach(b => { b.userData.arms.forEach(a => a.rotation.x = -.6); car.add(b); });
+      hs.add(car);
+      pTweens.push({t:0, dur:3.6, fn:u => { const e = ease(u), [x,z] = route(e), [nx,nz] = route(Math.min(1,e+.02)); car.position.set(x,.12,z); car.rotation.y = Math.atan2(nx-x, nz-z); const k = Math.sin(u*44)*.45; bearers.forEach(b => { b.userData.legs[0].rotation.x = k; b.userData.legs[1].rotation.x = -k; }); },
+        done:() => { car.remove(p); hs.remove(car); place(); }});
+    }
   }
   function free(){ return {r:Math.max(0,CAPACITY.r-used.r), y:Math.max(0,CAPACITY.y-used.y), g:Math.max(0,CAPACITY.g-used.g), k:Math.max(0,CAPACITY.k-used.k)}; }
 
@@ -504,7 +623,7 @@ function createWorld(stage, cb){
   new ResizeObserver(resize).observe(stage); resize();
 
   /* ================================================== bucle */
-  let last = performance.now(), flash = 0, blink = 0;
+  let last = performance.now(), flash = 0, blink = 0, crowdTick = 0;
   function loop(now){
     const dt = Math.min(.05, (now - last)/1000); last = now;
     if (fly){ fly.u = Math.min(1, fly.u + dt/fly.dur); const e = ease(fly.u); fly.c.position.lerpVectors(fly.p0, fly.p, e); fly.ctl.target.lerpVectors(fly.t0, fly.t, e); if (fly.u >= 1) fly = null; }
@@ -526,6 +645,7 @@ function createWorld(stage, cb){
       if (Math.random() < .0018) flash = 1; flash = Math.max(0, flash - dt*3.2); flashLight.intensity = flash*1.4;
       const s = 1 + Math.sin(now/280)*.14; Object.values(spotObjs).forEach(o => { o.ring.scale.set(s,s,s); o.icon.position.y = o.baseY + Math.sin(now/500 + o.h.n)*.18; });
     }
+    if (!reduced){ stepWalkers(dt); if ((crowdTick = (crowdTick + 1) % 2) === 0) placeCrowd(now/1000); }
     for (let i=pTweens.length-1;i>=0;i--){ const tw = pTweens[i]; tw.t += dt; const u = Math.min(1, tw.t/tw.dur); tw.fn(u); if (u >= 1){ pTweens.splice(i,1); tw.done(); } }
     renderer.render(view === "vall" ? scene : hs, view === "vall" ? camera : hcam);
     requestAnimationFrame(loop);
@@ -545,7 +665,7 @@ function createWorld(stage, cb){
   api.finishActivation = () => { applyAct(T_END); anim.t = T_END; if (anim.playing){ anim.playing = false; ctlV.enabled = view === "vall"; const d = anim.done; anim.done = null; d && d(); } };
   api.isPlaying = () => anim.playing;
   api.admit = admit; api.free = free;
-  api.resetAll = () => { act.visible = false; anim.playing = false; while (patients.children.length) patients.remove(patients.children[0]); Object.keys(used).forEach(k => used[k] = 0); pTweens.length = 0;
+  api.resetAll = () => { act.visible = false; anim.playing = false; while (patients.children.length) patients.remove(patients.children[0]); Object.keys(used).forEach(k => used[k] = 0); pTweens.length = 0; buildQueue();
     Object.values(spotObjs).forEach(o => { o.found = false; o.icon.material.map = spotTex(o.h.n, false); o.icon.material.needsUpdate = true; o.pillar.material.color.setHex(0xff7a2a); o.ring.material.color.setHex(0xff7a2a); o.name.visible = false; }); };
   api.setMotion = r => { reduced = r; rain.visible = !r; };
   api.setLabels = on => { showLabels = on; placeLabels.visible = on; };
