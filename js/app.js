@@ -103,6 +103,9 @@ function startApp(USER){
   }
   $("#vVall").onclick = () => setView("vall");
   $("#lockBack").onclick = () => setView("vall");
+  // tocar fora del requadre de l'avís també torna al mapa
+  $("#lock").addEventListener("click", e => { if (!e.target.closest(".lockcard")) setView("vall"); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#lock").hidden) setView("vall"); });
   $("#vHosp").onclick = () => setView("hosp");
   $("#zIn").onclick = () => W.zoom(1); $("#zOut").onclick = () => W.zoom(-1); $("#zHome").onclick = () => W.resetCam();
   $("#skip").onclick = () => W.finishActivation();
@@ -181,6 +184,7 @@ function startApp(USER){
   function openSpot(id){
     const h = HOTSPOTS.find(x => x.id === id); if (!h) return;
     if (S.phase === 1 && !S.found.includes(id)){ S.found.push(id); save(); W.markFound(id); }
+    if (W.getView() !== "vall") setView("vall");
     W.focusSpot(id);
     const d = $("#dlg");
     d.innerHTML = `<figure><div class="imgwrap"><img src="${COMMONS(h.foto)}" alt="${esc(h.alt)}" loading="eager" referrerpolicy="no-referrer"></div>
